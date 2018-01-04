@@ -22,12 +22,12 @@ type Client interface {
 
 	// Returns a user object for a given user ID.
 	// The special ID "@me" returns the authenticating user.
-	User(ctx context.Context, id string, opts ...ReqOption) (*discordgo.User, error)
+	User(ctx context.Context, id string) (*discordgo.User, error)
 
 	// Returns a gateway for a websocket connection.
 	// Depending on the type of token used, this will call either /gateway or /gateway/bot;
 	// the two are identical, except the latter will also provide a suggested shard count.
-	Gateway(ctx context.Context, opts ...ReqOption) (*Gateway, error)
+	Gateway(ctx context.Context) (*Gateway, error)
 
 	// Returns the token used by this client.
 	Token() *oauth2.Token
@@ -104,18 +104,18 @@ func (c *client) RequestJSON(ctx context.Context, method, urlStr string, body []
 	return json.Unmarshal(data, out)
 }
 
-func (c *client) User(ctx context.Context, id string, opts ...ReqOption) (*discordgo.User, error) {
+func (c *client) User(ctx context.Context, id string) (*discordgo.User, error) {
 	var user discordgo.User
-	return &user, c.RequestJSON(ctx, "GET", c.BaseURL+EndpointUser(id), nil, &user, opts...)
+	return &user, c.RequestJSON(ctx, "GET", c.BaseURL+EndpointUser(id), nil, &user)
 }
 
-func (c *client) Gateway(ctx context.Context, opts ...ReqOption) (*Gateway, error) {
+func (c *client) Gateway(ctx context.Context) (*Gateway, error) {
 	ep := EndpointGateway
 	if c.Tok.TokenType == "Bot" {
 		ep = EndpointGatewayBot
 	}
 	var gw Gateway
-	return &gw, c.RequestJSON(ctx, "GET", c.BaseURL+ep, nil, &gw, opts...)
+	return &gw, c.RequestJSON(ctx, "GET", c.BaseURL+ep, nil, &gw)
 }
 
 func (c *client) Token() *oauth2.Token {
