@@ -126,3 +126,7 @@ func TestClientUser(t *testing.T) {
 		})
 	})
 }
+
+func TestClientToken(t *testing.T) {
+	assert.Equal(t, BotToken("hi"), NewClient(BotToken("hi")).Token())
+}
