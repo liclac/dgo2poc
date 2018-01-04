@@ -65,12 +65,14 @@ Thus, instead of having to instantiate a `MessageSend` for every message, or hav
 // Send a message.
 c.ChannelMessageSend(cid, "hi!")
 
-// Send a message with an attachment.
-f, err := os.Open("myfile.jpg")
-c.ChannelMessageSend(cid, "hi!", SendWithFile("myfile.jpg", f))
+// Send a message with an embed.
+c.ChannelMessageSend(cid, "hi!", SendWithEmbed(...))
 
-// Send a message with embeds.
-c.ChannelMessageSend(cid, "hi!", SendWithEmbed(...), SendWithEmbed(...))
+// Send a message with attachments.
+c.ChannelMessageSend(cid, "hi!",
+    SendWithFile("file1.jpg", r1),
+    SendWithFile("file2.jpg", r2),
+)
 ```
 
 Behind the scenes, these options would be simple functions along these lines:
