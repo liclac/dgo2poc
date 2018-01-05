@@ -24,6 +24,9 @@ type Client interface {
 	// The special ID "@me" returns the authenticating user.
 	User(ctx context.Context, id string) (*discordgo.User, error)
 
+	// Sends a message to the given channel.
+	ChannelMessageCreate(ctx context.Context, channel, content string, opts ...SendOpt) (*discordgo.Message, error)
+
 	// Returns a gateway for a websocket connection.
 	// Depending on the type of token used, this will call either /gateway or /gateway/bot;
 	// the two are identical, except the latter will also provide a suggested shard count.
@@ -107,6 +110,19 @@ func (c *client) RequestJSON(ctx context.Context, method, urlStr string, body []
 func (c *client) User(ctx context.Context, id string) (*discordgo.User, error) {
 	var user discordgo.User
 	return &user, c.RequestJSON(ctx, "GET", c.BaseURL+EndpointUser(id), nil, &user)
+}
+
+func (c *client) ChannelMessageCreate(ctx context.Context, cid, content string, opts ...SendOpt) (*discordgo.Message, error) {
+	send := discordgo.MessageSend{Content: content}
+	for _, opt := range opts {
+		opt(&send)
+	}
+	data, err := json.Marshal(send)
+	if err != nil {
+		return nil, err
+	}
+	var msg discordgo.Message
+	return &msg, c.RequestJSON(ctx, "POST", c.BaseURL+EndpointChannelMessages(cid), data, &msg)
 }
 
 func (c *client) Gateway(ctx context.Context) (*Gateway, error) {
