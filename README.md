@@ -134,7 +134,7 @@ This is a bit of a controversial one, based on discussion on Discord. If you're 
 
 The basic idea is that you have a single "root" context, from which an arbitrarily nested tree of child contexts can be created. A context can carry arbitrary data, and can be cancelled, time-limited or given deadlines. If a context is cancelled, so are all child contexts, and because of this it has become the de-facto way to solve cancellation in Go programs.
 
-Firstly, every API call done by a Client takes a context, which when cancelled will abort the request.
+Every API call done by a Client takes a context, which when cancelled will abort the request.
 
 ```go
 // context.Background() is a context that never expires and can't be cancelled.
@@ -147,7 +147,7 @@ cl := NewClient(...)
 me, err := cl.User("@me")
 ```
 
-Second, because a context can carry arbitrary data, we can do something like this.
+Because a context can carry arbitrary data, we can now do something like this.
 
 ```go
 // Handler functions take a context as their first argument.
