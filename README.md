@@ -138,13 +138,15 @@ Every API call done by a Client takes a context, which when cancelled will abort
 
 ```go
 // context.Background() is a context that never expires and can't be cancelled.
+cl := NewClient(...)
+me, err := cl.User(context.Background(), "@me")
+
 // Make a child context that times out after 10s.
 ctx, cancel := context.WithTimeout(10 * time.Second)
 defer cancel()
 
 // If this takes more than 10s, or is manually cancelled, it will be aborted.
-cl := NewClient(...)
-me, err := cl.User("@me")
+me, err := cl.User(ctx, "@me")
 ```
 
 Because a context can carry arbitrary data, we can now do something like this.
@@ -157,7 +159,7 @@ ws.AddHandler(OnReady(func(ctx context.Context, r *Ready) {
     cl := GetClient(ctx)
 
     // This will be aborted when the session disconnects.
-    me, err := cl.User("@me")
+    me, err := cl.User(ctx, "@me")
 }))
 
 // Run for 10s, then disconnect.
