@@ -33,6 +33,10 @@ type WSClient interface {
 	// Adds event handler(s). Handlers are created by each event's On... function.
 	// For example, to handle Ready events, use OnReady.
 	AddHandler(hl ...wsHandler) func()
+
+	// Adds intercept handler(s). See AddHandler() for more information.
+	// Intercept handlers are invoked synchronously before regular handlers.
+	AddIntercept(hl ...wsHandler) func()
 }
 
 type wsClient struct {
@@ -40,9 +44,10 @@ type wsClient struct {
 	Token *oauth2.Token
 	Opts  []WSOpt
 
-	SessionID string       // last session id, for resume
-	Seq       atomic.Int64 // last seq received
-	Handlers  wsHandlers   // all registered handlers
+	SessionID  string       // last session id, for resume
+	Seq        atomic.Int64 // last seq received
+	Handlers   wsHandlers   // all registered handlers
+	Intercepts wsHandlers   // all registered intercepts
 
 	send chan<- wsPayload // use with Send() wrapper
 	recv chan wsPayload   // only access for testing!!
@@ -52,23 +57,12 @@ func NewWSClient(cl Client, opts ...WSOpt) WSClient {
 	return &wsClient{REST: cl, Token: cl.Token(), Opts: opts}
 }
 
-func (c *wsClient) AddHandler(hls ...wsHandler) func() {
-	switch len(hls) {
-	case 0:
-		return func() {}
-	case 1:
-		return hls[0](&c.Handlers)
-	default:
-		removers := make([]func(), len(hls))
-		for i, hl := range hls {
-			removers[i] = hl(&c.Handlers)
-		}
-		return func() {
-			for _, fn := range removers {
-				fn()
-			}
-		}
-	}
+func (c *wsClient) AddHandler(fns ...wsHandler) func() {
+	return c.Handlers.Add(fns...)
+}
+
+func (c *wsClient) AddIntercept(fns ...wsHandler) func() {
+	return c.Intercepts.Add(fns...)
 }
 
 func (c *wsClient) Run(ctx context.Context) (rerr error) {
@@ -149,7 +143,7 @@ func (c *wsClient) run(ctx context.Context, recv, send chan wsPayload) error {
 			switch pl.OP {
 			case WSOPDispatch:
 				log.Printf("wsclient: dispatch: %s: %s", pl.Type, string(pl.Data))
-				if err := c.Handlers.Dispatch(ctx, pl.Type, pl.Data); err != nil {
+				if err := dispatch(ctx, pl.Type, pl.Data, &c.Handlers, &c.Intercepts); err != nil {
 					return errors.Wrapf(err, "%s", pl.Type)
 				}
 			case WSOPHello:

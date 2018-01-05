@@ -25,6 +25,8 @@ import (
 	"sync"
 	"context"
 	"encoding/json"
+
+	"github.com/pkg/errors"
 )
 
 type wsHandlers struct { {{range .}}
@@ -35,29 +37,53 @@ type wsHandlers struct { {{range .}}
 
 type wsHandler func(hls *wsHandlers) func()
 
-func (hls *wsHandlers) Dispatch(ctx context.Context, t string, data []byte) error {
+func (h *wsHandlers) Add(hls ...wsHandler) func() {
+	switch len(hls) {
+	case 0:
+		return func() {}
+	case 1:
+		return hls[0](h)
+	default:
+		removers := make([]func(), len(hls))
+		for i, hl := range hls {
+			removers[i] = hl(h)
+		}
+		return func() {
+			for _, fn := range removers {
+				fn()
+			}
+		}
+	}
+}
+
+{{range .}}
+func (hls *wsHandlers) Dispatch{{.}}(ctx context.Context, ev *{{.}}, sync bool) {
+	hls.{{.}}Lock.RLock()
+	fns := hls.{{.}}
+	hls.{{.}}Lock.RUnlock()
+	for _, ptr := range fns {
+		fn := *ptr
+		if sync {
+			fn(ctx, ev)
+		} else {
+			go fn(ctx, ev)
+		}
+	}
+}
+{{end}}
+
+func dispatch(ctx context.Context, t string, data []byte, pre, main *wsHandlers) error {
 	switch t { {{range .}}
 	case "{{toEvent .}}":
 			var ev {{.}}
 			if err := json.Unmarshal(data, &ev); err != nil {
 				return errors.Wrap(err, t)
 			}
-			hls.Dispatch{{.}}(ctx, &ev){{end}}
+			pre.Dispatch{{.}}(ctx, &ev, true)
+			main.Dispatch{{.}}(ctx, &ev, false){{end}}
 	}
 	return nil
 }
-
-{{range .}}
-func (hls *wsHandlers) Dispatch{{.}}(ctx context.Context, ev *{{.}}) {
-	hls.{{.}}Lock.RLock()
-	fns := hls.{{.}}
-	hls.{{.}}Lock.RUnlock()
-	for _, ptr := range fns {
-		fn := *ptr
-		go fn(ctx, ev)
-	}
-}
-{{end}}
 
 {{range .}}
 // Handle a {{.}} event. See WSClient.AddHandler().

@@ -21,42 +21,71 @@ type wsHandlers struct {
 
 type wsHandler func(hls *wsHandlers) func()
 
-func (hls *wsHandlers) Dispatch(ctx context.Context, t string, data []byte) error {
+func (h *wsHandlers) Add(hls ...wsHandler) func() {
+	switch len(hls) {
+	case 0:
+		return func() {}
+	case 1:
+		return hls[0](h)
+	default:
+		removers := make([]func(), len(hls))
+		for i, hl := range hls {
+			removers[i] = hl(h)
+		}
+		return func() {
+			for _, fn := range removers {
+				fn()
+			}
+		}
+	}
+}
+
+func (hls *wsHandlers) DispatchGuildCreate(ctx context.Context, ev *GuildCreate, sync bool) {
+	hls.GuildCreateLock.RLock()
+	fns := hls.GuildCreate
+	hls.GuildCreateLock.RUnlock()
+	for _, ptr := range fns {
+		fn := *ptr
+		if sync {
+			fn(ctx, ev)
+		} else {
+			go fn(ctx, ev)
+		}
+	}
+}
+
+func (hls *wsHandlers) DispatchReady(ctx context.Context, ev *Ready, sync bool) {
+	hls.ReadyLock.RLock()
+	fns := hls.Ready
+	hls.ReadyLock.RUnlock()
+	for _, ptr := range fns {
+		fn := *ptr
+		if sync {
+			fn(ctx, ev)
+		} else {
+			go fn(ctx, ev)
+		}
+	}
+}
+
+func dispatch(ctx context.Context, t string, data []byte, pre, main *wsHandlers) error {
 	switch t {
 	case "GUILD_CREATE":
 		var ev GuildCreate
 		if err := json.Unmarshal(data, &ev); err != nil {
 			return errors.Wrap(err, t)
 		}
-		hls.DispatchGuildCreate(ctx, &ev)
+		pre.DispatchGuildCreate(ctx, &ev, true)
+		main.DispatchGuildCreate(ctx, &ev, false)
 	case "READY":
 		var ev Ready
 		if err := json.Unmarshal(data, &ev); err != nil {
 			return errors.Wrap(err, t)
 		}
-		hls.DispatchReady(ctx, &ev)
+		pre.DispatchReady(ctx, &ev, true)
+		main.DispatchReady(ctx, &ev, false)
 	}
 	return nil
-}
-
-func (hls *wsHandlers) DispatchGuildCreate(ctx context.Context, ev *GuildCreate) {
-	hls.GuildCreateLock.RLock()
-	fns := hls.GuildCreate
-	hls.GuildCreateLock.RUnlock()
-	for _, ptr := range fns {
-		fn := *ptr
-		go fn(ctx, ev)
-	}
-}
-
-func (hls *wsHandlers) DispatchReady(ctx context.Context, ev *Ready) {
-	hls.ReadyLock.RLock()
-	fns := hls.Ready
-	hls.ReadyLock.RUnlock()
-	for _, ptr := range fns {
-		fn := *ptr
-		go fn(ctx, ev)
-	}
 }
 
 // Handle a GuildCreate event. See WSClient.AddHandler().
