@@ -126,3 +126,42 @@ func (c *WSClient) AddHandler(hl WSHandler) {
 ```
 
 The actual thing is code-generated and somewhat more complex, involving proper locking and a way to remove handlers once added, but the basic semantics remain the same.
+
+Contexts.
+---------
+
+This is a bit of a controversial one, based on discussion on Discord. If you're not familiar with [contexts](https://blog.golang.org/context), it's a package originally introduced as `x/net/context`, finally gaining such widespread use that it was introduced into the standard library ([`context`](https://godoc.org/context)) and retrofitted into all sorts of standard library APIs, including [net.Dial](https://godoc.org/net#Dialer.DialContext) and [net/http](https://godoc.org/net/http#Request.WithContext).
+
+The basic idea is that you have a single "root" context, from which an arbitrarily nested tree of child contexts can be created. A context can carry arbitrary data, and can be cancelled, time-limited or given deadlines. If a context is cancelled, so are all child contexts, and because of this it has become the de-facto way to solve cancellation in Go programs.
+
+Firstly, every API call done by a Client takes a context, which when cancelled will abort the request.
+
+```go
+// context.Background() is a context that never expires and can't be cancelled.
+// Make a child context that times out after 10s.
+ctx, cancel := context.WithTimeout(10 * time.Second)
+defer cancel()
+
+// If this takes more than 10s, or is manually cancelled, it will be aborted.
+cl := NewClient(...)
+me, err := cl.User("@me")
+```
+
+Second, because a context can carry arbitrary data, we can do something like this.
+
+```go
+// Handler functions take a context as their first argument.
+ws := NewWSClient(...)
+ws.AddHandler(OnReady(func(ctx context.Context, r *Ready) {
+    // The provided context embeds the WSClient and its parent Client.
+    cl := GetClient(ctx)
+
+    // This will be aborted when the session disconnects.
+    me, err := cl.User("@me")
+}))
+
+// Run for 10s, then disconnect.
+ctx, cancel := context.WithTimeout(10 * time.Second)
+defer cancel()
+err := ws.Run(ctx)
+```

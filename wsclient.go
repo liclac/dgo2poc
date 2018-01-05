@@ -72,6 +72,8 @@ func (c *wsClient) AddHandler(hls ...wsHandler) func() {
 }
 
 func (c *wsClient) Run(ctx context.Context) (rerr error) {
+	ctx = withClient(ctx, c.REST)
+	ctx = withWSClient(ctx, c)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
